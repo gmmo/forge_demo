@@ -1,0 +1,83 @@
+/*
+ * Copyright (c) 2017-2025 The Forge Interactive Inc.
+ *
+ * This file is part of The-Forge
+ * (see https://github.com/ConfettiFX/The-Forge).
+ *
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+// Shader for simple shading with a point light
+// for planets in Unit Test 12 - Transformations
+
+#include "Resources.h.fsl"
+
+STRUCT(VSOutput)
+{
+    DATA(float4, Position, SV_Position);
+    DATA(float2, UV, TEXCOORD0);
+    DATA(float3, WorldPos, TEXCOORD1);
+    DATA(float3, WorldNormal, TEXCOORD2);
+    DATA(float3, BaseColor, TEXCOORD3);
+};
+
+ROOT_SIGNATURE(DefaultRootSignature)
+float4 PS_MAIN(VSOutput In)
+{
+    INIT_MAIN;
+
+    //original working
+    //float2 uv = In.UV;
+    //float4 texColor = SampleTex2D(gBotTexture, gSampler, uv);
+    //RETURN(texColor);
+
+    // Sample texture (existing)
+    float2 uv = In.UV;
+    float4 texColor = SampleTex2D(gBotTexture, gSampler, uv);
+    
+    // --- NEW: Per-pixel lighting ---
+    float3 N = normalize(In.WorldNormal);
+    float3 V = normalize(gUniformBlock.cameraPosition.xyz - In.WorldPos);
+    float3 L = normalize(gUniformBlock.lightDirection.xyz);
+
+    // Special case: self-lit objects (light marker)
+    if (gUniformBlock.color.w < 0.01)
+    {
+        RETURN(float4(texColor.rgb * In.BaseColor * gUniformBlock.color.rgb, 1.0));
+    }
+    
+    // Base color
+    float3 baseColor = texColor.rgb * In.BaseColor * gUniformBlock.color.rgb;
+    
+    // Ambient
+    float3 ambient = 0.2 * baseColor;
+    
+    // Diffuse
+    float diffuse = max(dot(N, L), 0.0);
+    float3 diffuseColor = diffuse * gUniformBlock.lightColor.rgb * baseColor;
+    
+    // Specular (Blinn-Phong)
+    float3 H = normalize(L + V);
+    float spec = pow(max(dot(N, H), 0.0), 32.0);
+    float3 specular = spec * gUniformBlock.lightColor.rgb * 0.5;
+    
+    // Combine
+    float3 finalColor = ambient + diffuseColor + specular;
+    
+    RETURN(float4(finalColor, 1.0));
+}
